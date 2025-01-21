@@ -56,6 +56,7 @@ class Generator3D(object):
         self.padding = padding
         self.sample = sample
         self.simplify_nfaces = simplify_nfaces
+        self.labels = None
         
         # for pointcloud_crop
         self.vol_bound = vol_bound
@@ -74,6 +75,17 @@ class Generator3D(object):
         stats_dict = {}
 
         inputs = data.get('inputs', torch.empty(1, 0)).to(device)
+        
+        # Create labels dictionary that will be passed through
+        category_id = data.get('category_id')
+        if category_id is not None:
+            category_id = category_id.to(device)
+            
+        self.labels = {
+            'category_id': category_id,
+            'category_name': data.get('category_name', None)
+        }
+
         kwargs = {}
 
         t0 = time.time()
@@ -187,7 +199,7 @@ class Generator3D(object):
                 t = (bb_max - bb_min)/nx # inteval
                 pp = np.mgrid[bb_min[0]:bb_max[0]:t[0], bb_min[1]:bb_max[1]:t[1], bb_min[2]:bb_max[2]:t[2]].reshape(3, -1).T
                 pp = torch.from_numpy(pp).to(device)
-                values = self.eval_points(pp, c, vol_bound=vol_bound, **kwargs).detach().cpu().numpy()
+                values = self.eval_points(pp, c, **kwargs).detach().cpu().numpy()
                 values = values.reshape(nx, nx, nx)
             else:
                 mesh_extractor = MISE(self.resolution0, self.upsampling_steps, threshold)
@@ -197,7 +209,7 @@ class Generator3D(object):
                     pp = pp * (bb_max - bb_min) + bb_min
                     pp = torch.from_numpy(pp).to(self.device)
 
-                    values = self.eval_points(pp, c, vol_bound=vol_bound, **kwargs).detach().cpu().numpy()
+                    values = self.eval_points(pp, c, **kwargs).detach().cpu().numpy()
                     values = values.astype(np.float64)
                     mesh_extractor.update(points, values)
                     points = mesh_extractor.query()
@@ -293,12 +305,13 @@ class Generator3D(object):
             c = self.model.encode_inputs(input_cur)
         return c
     
-    def predict_crop_occ(self, pi, c, vol_bound=None, **kwargs):
+    def predict_crop_occ(self, pi, c, labels=None, vol_bound=None, **kwargs):
         ''' Predict occupancy values for a crop
 
         Args:
             pi (dict): query points
             c (tensor): encoded feature volumes
+            labels (dict): dictionary containing category_id and category_name
             vol_bound (dict): volume boundary
         '''
         occ_hat = pi.new_empty((pi.shape[0]))
@@ -315,12 +328,12 @@ class Generator3D(object):
         
         # predict occupancy of the current crop
         with torch.no_grad():
-            occ_cur = self.model.decode(pi_in, c, **kwargs).logits
+            occ_cur = self.model.decode(pi_in, c, labels=labels, **kwargs).logits
         occ_hat = occ_cur.squeeze(0)
         
         return occ_hat
 
-    def eval_points(self, p, c=None, vol_bound=None, **kwargs):
+    def eval_points(self, p, c=None, **kwargs):
         ''' Evaluates the occupancy values for the points.
 
         Args:
@@ -332,7 +345,7 @@ class Generator3D(object):
         for pi in p_split:
             if self.input_type == 'pointcloud_crop':
                 if self.vol_bound is not None: # sliding-window manner
-                    occ_hat = self.predict_crop_occ(pi, c, vol_bound=vol_bound, **kwargs)
+                    occ_hat = self.predict_crop_occ(pi, c, labels=self.labels, vol_bound=self.vol_bound, **kwargs)
                     occ_hats.append(occ_hat)
                 else: # entire scene
                     pi_in = pi.unsqueeze(0).to(self.device)
@@ -343,12 +356,12 @@ class Generator3D(object):
                         p_n[key] = normalize_coord(pi.clone(), self.input_vol, plane=key).unsqueeze(0).to(self.device)
                     pi_in['p_n'] = p_n
                     with torch.no_grad():
-                        occ_hat = self.model.decode(pi_in, c, **kwargs).logits
+                        occ_hat = self.model.decode(pi_in, c, labels=self.labels, **kwargs).logits
                     occ_hats.append(occ_hat.squeeze(0).detach().cpu())
             else:
                 pi = pi.unsqueeze(0).to(self.device)
                 with torch.no_grad():
-                    occ_hat = self.model.decode(pi, c, **kwargs).logits
+                    occ_hat = self.model.decode(pi, c, labels=self.labels, **kwargs).logits
                 occ_hats.append(occ_hat.squeeze(0).detach().cpu())
         
         occ_hat = torch.cat(occ_hats, dim=0)
@@ -440,7 +453,7 @@ class Generator3D(object):
         for vi in vertices_split:
             vi = vi.unsqueeze(0).to(device)
             vi.requires_grad_()
-            occ_hat = self.model.decode(vi, c).logits
+            occ_hat = self.model.decode(vi, c, labels=self.labels).logits
             out = occ_hat.sum()
             out.backward()
             ni = -vi.grad
@@ -493,7 +506,7 @@ class Generator3D(object):
             face_normal = face_normal / \
                 (face_normal.norm(dim=1, keepdim=True) + 1e-10)
             face_value = torch.sigmoid(
-                self.model.decode(face_point.unsqueeze(0), c).logits
+                self.model.decode(face_point.unsqueeze(0), c, labels=self.labels).logits
             )
             normal_target = -autograd.grad(
                 [face_value.sum()], [face_point], create_graph=True)[0]

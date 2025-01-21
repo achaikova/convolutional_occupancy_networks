@@ -58,8 +58,10 @@ class ConvolutionalOccupancyNetwork(nn.Module):
     def create_embeddings(self, labels):
         if self.embedding_model is not None:
             embeddings = self.label_embedding.encode(labels['category_name'])
-            embeddings = embeddings.mean(dim=1)
+            if len(embeddings.shape) == 3:
+                embeddings = embeddings.mean(axis=1)
             print("embeddings after mean", embeddings.shape)
+            embeddings = torch.tensor(embeddings).to(self._device)
             embeddings = self.reduce_embedding[0](embeddings)
             embeddings = self.reduce_embedding[1](embeddings)
         elif self.label_embedding is not None:

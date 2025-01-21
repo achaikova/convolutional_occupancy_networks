@@ -4,6 +4,7 @@ from torch.utils import data
 import numpy as np
 import yaml
 from src.common import decide_total_volume_range, update_reso
+import torch
 
 
 logger = logging.getLogger(__name__)
@@ -16,7 +17,6 @@ class Field(object):
 
     def load(self, data_path, idx, category):
         ''' Loads a data point.
-
         Args:
             data_path (str): path to data file
             idx (int): index of data point
@@ -26,7 +26,6 @@ class Field(object):
 
     def check_complete(self, files):
         ''' Checks if set is complete.
-
         Args:
             files: files
         '''
@@ -40,7 +39,6 @@ class Shapes3dDataset(data.Dataset):
     def __init__(self, dataset_folder, fields, split=None,
                  categories=None, no_except=True, transform=None, cfg=None):
         ''' Initialization of the the 3D shape dataset.
-
         Args:
             dataset_folder (str): dataset folder
             fields (dict): dictionary of fields
@@ -73,7 +71,7 @@ class Shapes3dDataset(data.Dataset):
             self.metadata = {
                 c: {'id': c, 'name': 'n/a'} for c in categories
             } 
-        
+
         # Set index
         for c_idx, c in enumerate(categories):
             self.metadata[c]['idx'] = c_idx
@@ -94,7 +92,7 @@ class Shapes3dDataset(data.Dataset):
                 split_file = os.path.join(subpath, split + '.lst')
                 with open(split_file, 'r') as f:
                     models_c = f.read().split('\n')
-                
+
                 if '' in models_c:
                     models_c.remove('')
 
@@ -102,7 +100,7 @@ class Shapes3dDataset(data.Dataset):
                     {'category': c, 'model': m}
                     for m in models_c
                 ]
-        
+
         # precompute
         if self.cfg['data']['input_type'] == 'pointcloud_crop': 
             self.split = split
@@ -114,7 +112,7 @@ class Shapes3dDataset(data.Dataset):
                 depth = cfg['model']['encoder_kwargs']['unet_kwargs']['depth']
             elif 'unet3d' in cfg['model']['encoder_kwargs']:
                 depth = cfg['model']['encoder_kwargs']['unet3d_kwargs']['num_levels']
-            
+
             self.depth = depth
             #! for sliding-window case, pass all points!
             if self.cfg['generation']['sliding_window']:
@@ -124,7 +122,7 @@ class Shapes3dDataset(data.Dataset):
                 self.total_input_vol, self.total_query_vol, self.total_reso = \
                     decide_total_volume_range(query_vol_metric, recep_field, unit_size, depth)
 
-            
+
     def __len__(self):
         ''' Returns the length of the dataset.
         '''
@@ -132,7 +130,6 @@ class Shapes3dDataset(data.Dataset):
 
     def __getitem__(self, idx):
         ''' Returns an item of the dataset.
-
         Args:
             idx (int): ID of data point
         '''
@@ -141,14 +138,18 @@ class Shapes3dDataset(data.Dataset):
         c_idx = self.metadata[category]['idx']
 
         model_path = os.path.join(self.dataset_folder, category, model)
-        data = {}
+        data = {
+            'category_id': torch.tensor(c_idx, dtype=torch.long),
+            'category_name': category,
+            'category_label': self.metadata[category]['name']  # human-readable name from metadata
+        }
 
         if self.cfg['data']['input_type'] == 'pointcloud_crop':
             info = self.get_vol_info(model_path)
             data['pointcloud_crop'] = True
         else:
             info = c_idx
-        
+
         for field_name, field in self.fields.items():
             try:
                 field_data = field.load(model_path, idx, info)
@@ -175,10 +176,9 @@ class Shapes3dDataset(data.Dataset):
             data = self.transform(data)
 
         return data
-    
+
     def get_vol_info(self, model_path):
         ''' Get crop information
-
         Args:
             model_path (str): path to the current data
         '''
@@ -193,7 +193,7 @@ class Shapes3dDataset(data.Dataset):
         else:
             num = np.random.randint(self.cfg['data']['multi_files'])
             file_path = os.path.join(model_path, field_name, '%s_%02d.npz' % (field_name, num))
-        
+
         points_dict = np.load(file_path)
         p = points_dict['points']
         if self.split == 'train':
@@ -201,7 +201,7 @@ class Shapes3dDataset(data.Dataset):
             p_c = [np.random.uniform(p[:,i].min(), p[:,i].max()) for i in range(3)]
             # p_c = [np.random.uniform(-0.55, 0.55) for i in range(3)]
             p_c = np.array(p_c).astype(np.float32)
-            
+
             reso = query_vol_size + recep_field - 1
             # make sure the defined reso can be properly processed by UNet
             reso = update_reso(reso, self.depth)
@@ -224,13 +224,12 @@ class Shapes3dDataset(data.Dataset):
                     'input_vol' : input_vol,
                     'query_vol' : query_vol}
         return vol_info
-    
+
     def get_model_dict(self, idx):
         return self.models[idx]
 
     def test_model_complete(self, category, model):
         ''' Tests if model is complete.
-
         Args:
             model (str): modelname
         '''
@@ -248,7 +247,6 @@ class Shapes3dDataset(data.Dataset):
 def collate_remove_none(batch):
     ''' Collater that puts each data field into a tensor with outer dimension
         batch size.
-
     Args:
         batch: batch
     '''

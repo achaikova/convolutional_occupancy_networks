@@ -10,6 +10,7 @@ data:
   points_iou_file: points.npz
   voxels_file: null
 model:
+  decoder: simple_local
   encoder: pointnet_local_pool
   encoder_kwargs:
     hidden_dim: 32
@@ -20,20 +21,21 @@ model:
       depth: 4
       merge_mode: concat
       start_filts: 32
-  decoder: simple_local
   decoder_kwargs:
     sample_mode: bilinear # bilinear / nearest
     hidden_size: 32
   c_dim: 32
+  embedding_mode: 'cat'  # or 'encoder' or 'none'
+  embedding_dim: 32  # size of embedding vector
+  num_classes: 3    # number of classes in the dataset
 training:
-  out_dir: out/pointcloud/shapenet_3plane_3class
+  out_dir:  out/pointcloud/shapenet_3plane_simple_cat_3class
   batch_size: 64
   print_every: 100
   visualize_every: 1000
   checkpoint_every: 1000
   validate_every: 2000
   backup_every: 2000
-  eval_sample: false
   model_selection_metric: iou
   model_selection_mode: maximize
   n_workers: 8

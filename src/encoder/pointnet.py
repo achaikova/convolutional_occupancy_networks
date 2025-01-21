@@ -134,7 +134,17 @@ class LocalPoolPointnet(nn.Module):
         if 'grid' in self.plane_type:
             coord['grid'] = normalize_3d_coordinate(p.clone(), padding=self.padding)
             index['grid'] = coordinate2index(coord['grid'], self.reso_grid, coord_type='3d')
-        
+
+        # inputs = p
+        # if embeddings is not None:
+        #     embeddings = embeddings.unsqueeze(1).expand(-1, p.size(1), -1)
+        #     if embedding_mode == 'encoder_cat':
+        #         inputs = torch.cat([inputs, embeddings], dim=-1)
+        #     elif embedding_mode == 'encoder_add':
+        #         if embeddings.shape != inputs.shape:
+        #             raise ValueError(f'Embedding dimension ({embeddings.shape}) must match point dimension ({inputs.shape}) for addition mode')
+        #         inputs = inputs + embeddings
+
         net = self.fc_pos(p)
 
         net = self.blocks[0](net)
@@ -221,7 +231,7 @@ class PatchLocalPoolPointnet(nn.Module):
             self.map2local = map2local(unit_size, pos_encoding=pos_encoding)
         else:
             self.map2local = None
-        
+
         if pos_encoding == 'sin_cos':
             self.fc_pos = nn.Linear(60, 2*hidden_dim)
         else:
@@ -237,7 +247,7 @@ class PatchLocalPoolPointnet(nn.Module):
             fea_plane = scatter_mean(c, index) # B x c_dim x reso^2
             if fea_plane.shape[-1] > self.reso_plane**2: # deal with outliers
                 fea_plane = fea_plane[:, :, :-1]
-        
+
         fea_plane = fea_plane.reshape(c.size(0), self.c_dim, self.reso_plane, self.reso_plane)
 
         # process the plane features with UNet
@@ -285,7 +295,7 @@ class PatchLocalPoolPointnet(nn.Module):
     def forward(self, inputs):
         p = inputs['points']
         index = inputs['index']
-    
+
         batch_size, T, D = p.size()
 
         if self.map2local:

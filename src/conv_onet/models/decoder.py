@@ -8,7 +8,6 @@ from src.common import normalize_coordinate, normalize_3d_coordinate, map2local
 class LocalDecoder(nn.Module):
     ''' Decoder.
         Instead of conditioning on global features, on plane/volume local features.
-
     Args:
         dim (int): input dimension
         c_dim (int): dimension of latent conditioned code c
@@ -20,7 +19,7 @@ class LocalDecoder(nn.Module):
     '''
 
     def __init__(self, dim=3, c_dim=128,
-                 hidden_size=256, n_blocks=5, leaky=False, sample_mode='bilinear', padding=0.1):
+                 hidden_size=256, n_blocks=5, leaky=False, sample_mode='bilinear', padding=0.1, plane_resolution=64):
         super().__init__()
         self.c_dim = c_dim
         self.n_blocks = n_blocks
@@ -46,7 +45,8 @@ class LocalDecoder(nn.Module):
 
         self.sample_mode = sample_mode
         self.padding = padding
-    
+        self.reso_plane = plane_resolution
+
 
     def sample_plane_feature(self, p, c, plane='xz'):
         xy = normalize_coordinate(p.clone(), plane=plane, padding=self.padding) # normalize to the range of (0, 1)
@@ -63,20 +63,37 @@ class LocalDecoder(nn.Module):
         c = F.grid_sample(c, vgrid, padding_mode='border', align_corners=True, mode=self.sample_mode).squeeze(-1).squeeze(-1)
         return c
 
+    def preprocess_embeddings(self, embeddings, c, embedding_mode):
+        if embeddings is not None:
+            embeddings = embeddings.unsqueeze(-1).unsqueeze(-1).expand(-1, -1, self.reso_plane, self.reso_plane)
+            if embedding_mode == 'cat':
+                c = torch.cat([c, embeddings], dim=1)
+            elif embedding_mode == 'add':
+                if embeddings.shape != c.shape:
+                    raise ValueError(f'Embedding dimension ({embeddings.shape}) must match point dimension ({c.shape}) for addition mode')
+                c = c + embeddings
+        return c
 
-    def forward(self, p, c_plane, **kwargs):
+    def forward(self, p, c_plane, embeddings=None, embedding_mode='none', **kwargs):
+        # print("embeddings", embeddings.shape)
         if self.c_dim != 0:
             plane_type = list(c_plane.keys())
             c = 0
             if 'grid' in plane_type:
-                c += self.sample_grid_feature(p, c_plane['grid'])
+                # print("grid", c_plane['grid'].shape)
+                c += self.sample_grid_feature(p, self.preprocess_embeddings(embeddings, c_plane['grid'], embedding_mode))
             if 'xz' in plane_type:
-                c += self.sample_plane_feature(p, c_plane['xz'], plane='xz')
+                # print("xz", c_plane['xz'].shape)
+                c += self.sample_plane_feature(p, self.preprocess_embeddings(embeddings, c_plane['xz'], embedding_mode), plane='xz')
             if 'xy' in plane_type:
-                c += self.sample_plane_feature(p, c_plane['xy'], plane='xy')
+                # print("xy", c_plane['xy'].shape)
+                c += self.sample_plane_feature(p, self.preprocess_embeddings(embeddings, c_plane['xy'], embedding_mode), plane='xy')
             if 'yz' in plane_type:
-                c += self.sample_plane_feature(p, c_plane['yz'], plane='yz')
+                # print("yz", c_plane['yz'].shape)
+                c += self.sample_plane_feature(p, self.preprocess_embeddings(embeddings, c_plane['yz'], embedding_mode), plane='yz')
+            # print("c before transpose", c.shape)
             c = c.transpose(1, 2)
+        # c = self.preprocess_embeddings(embeddings, c, embedding_mode)
 
         p = p.float()
         net = self.fc_p(p)
@@ -96,7 +113,6 @@ class LocalDecoder(nn.Module):
 class PatchLocalDecoder(nn.Module):
     ''' Decoder adapted for crop training.
         Instead of conditioning on global features, on plane/volume local features.
-
     Args:
         dim (int): input dimension
         c_dim (int): dimension of latent conditioned code c
@@ -108,7 +124,6 @@ class PatchLocalDecoder(nn.Module):
         unit_size (float): defined voxel unit size for local system
         pos_encoding (str): method for the positional encoding, linear|sin_cos
         padding (float): conventional padding paramter of ONet for unit cube, so [-0.5, 0.5] -> [-0.55, 0.55]
-
     '''
 
     def __init__(self, dim=3, c_dim=128,
@@ -144,7 +159,7 @@ class PatchLocalDecoder(nn.Module):
             self.fc_p = nn.Linear(60, hidden_size)
         else:
             self.fc_p = nn.Linear(dim, hidden_size)
-    
+
     def sample_feature(self, xy, c, fea_type='2d'):
         if fea_type == '2d':
             xy = xy[:, :, None].float()
@@ -176,7 +191,7 @@ class PatchLocalDecoder(nn.Module):
         p = p.float()
         if self.map2local:
             p = self.map2local(p)
-        
+
         net = self.fc_p(p)
         for i in range(self.n_blocks):
             if self.c_dim != 0:
@@ -190,7 +205,6 @@ class PatchLocalDecoder(nn.Module):
 
 class LocalPointDecoder(nn.Module):
     ''' Decoder for PointConv Baseline.
-
     Args:
         dim (int): input dimension
         c_dim (int): dimension of latent conditioned code c

@@ -11,7 +11,6 @@ from src.training import BaseTrainer
 
 class Trainer(BaseTrainer):
     ''' Trainer object for the Occupancy Network.
-
     Args:
         model (nn.Module): Occupancy Network model
         optimizer (optimizer): pytorch optimizer object
@@ -20,7 +19,6 @@ class Trainer(BaseTrainer):
         vis_dir (str): visualization directory
         threshold (float): threshold value
         eval_sample (bool): whether to evaluate samples
-
     '''
 
     def __init__(self, model, optimizer, device=None, input_type='pointcloud',
@@ -38,7 +36,6 @@ class Trainer(BaseTrainer):
 
     def train_step(self, data):
         ''' Performs a training step.
-
         Args:
             data (dict): data dictionary
         '''
@@ -49,10 +46,9 @@ class Trainer(BaseTrainer):
         self.optimizer.step()
 
         return loss.item()
-    
+
     def eval_step(self, data):
         ''' Performs an evaluation step.
-
         Args:
             data (dict): data dictionary
         '''
@@ -64,17 +60,19 @@ class Trainer(BaseTrainer):
 
         points = data.get('points').to(device)
         occ = data.get('points.occ').to(device)
-
         inputs = data.get('inputs', torch.empty(points.size(0), 0)).to(device)
+        category_id = data.get('category_id').to(device)
+        category_name = data.get('category_name')
+        labels = {'category_id': category_id, 'category_name': category_name}
         voxels_occ = data.get('voxels')
 
         points_iou = data.get('points_iou').to(device)
         occ_iou = data.get('points_iou.occ').to(device)
-        
+
         batch_size = points.size(0)
 
         kwargs = {}
-        
+
         # add pre-computed index
         inputs = add_key(inputs, data.get('inputs.ind'), 'points', 'index', device=device)
         # add pre-computed normalized coordinates
@@ -84,7 +82,9 @@ class Trainer(BaseTrainer):
         # Compute iou
         with torch.no_grad():
             p_out = self.model(points_iou, inputs, 
-                               sample=self.eval_sample, **kwargs)
+                             sample=self.eval_sample, 
+                             labels=labels,
+                             **kwargs)
 
         occ_iou_np = (occ_iou >= 0.5).cpu().numpy()
         occ_iou_hat_np = (p_out.probs >= threshold).cpu().numpy()
@@ -102,7 +102,9 @@ class Trainer(BaseTrainer):
             points_voxels = points_voxels.to(device)
             with torch.no_grad():
                 p_out = self.model(points_voxels, inputs,
-                                   sample=self.eval_sample, **kwargs)
+                                   sample=self.eval_sample, 
+                                   labels=labels,
+                                   **kwargs)
 
             voxels_occ_np = (voxels_occ >= 0.5).cpu().numpy()
             occ_hat_np = (p_out.probs >= threshold).cpu().numpy()
@@ -114,7 +116,6 @@ class Trainer(BaseTrainer):
 
     def compute_loss(self, data):
         ''' Computes the loss.
-
         Args:
             data (dict): data dictionary
         '''
@@ -122,7 +123,10 @@ class Trainer(BaseTrainer):
         p = data.get('points').to(device)
         occ = data.get('points.occ').to(device)
         inputs = data.get('inputs', torch.empty(p.size(0), 0)).to(device)
-        
+        category_id = data.get('category_id').to(device)
+        category_name = data.get('category_name')
+        labels = {'category_id': category_id, 'category_name': category_name}
+
         if 'pointcloud_crop' in data.keys():
             # add pre-computed index
             inputs = add_key(inputs, data.get('inputs.ind'), 'points', 'index', device=device)
@@ -130,13 +134,14 @@ class Trainer(BaseTrainer):
             # add pre-computed normalized coordinates
             p = add_key(p, data.get('points.normalized'), 'p', 'p_n', device=device)
 
-        c = self.model.encode_inputs(inputs)
-
         kwargs = {}
         # General points
-        logits = self.model.decode(p, c, **kwargs).logits
+        p_r = self.model(p, inputs, labels=labels, **kwargs)
+        # c = self.model.encode_inputs(inputs)
+        # # General points
+        # logits = self.model.decode(p, c, **kwargs).logits
         loss_i = F.binary_cross_entropy_with_logits(
-            logits, occ, reduction='none')
+            p_r.logits, occ, reduction='none')
         loss = loss_i.sum(-1).mean()
 
         return loss

@@ -34,7 +34,7 @@ def get_model(cfg, device=None, dataset=None, **kwargs):
     num_classes = cfg['model'].get('num_classes', 0)
 
     c_dim_decoder = c_dim
-    if embedding_dim > 0 and embedding_mode == 'add':
+    if embedding_dim > 0 and embedding_mode == 'cat':
         c_dim_decoder += embedding_dim
     
     try: 

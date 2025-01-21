@@ -75,19 +75,27 @@ class LocalDecoder(nn.Module):
         return c
 
     def forward(self, p, c_plane, embeddings=None, embedding_mode='none', **kwargs):
-
+        print("embeddings", embeddings.shape)
         if self.c_dim != 0:
             plane_type = list(c_plane.keys())
             c = 0
             if 'grid' in plane_type:
+                print("grid", c_plane['grid'].shape)
                 c += self.sample_grid_feature(p, self.preprocess_embeddings(embeddings, c_plane['grid'], embedding_mode))
             if 'xz' in plane_type:
+                print("xz", c_plane['xz'].shape)
                 c += self.sample_plane_feature(p, self.preprocess_embeddings(embeddings, c_plane['xz'], embedding_mode), plane='xz')
             if 'xy' in plane_type:
+                print("xy", c_plane['xy'].shape)
                 c += self.sample_plane_feature(p, self.preprocess_embeddings(embeddings, c_plane['xy'], embedding_mode), plane='xy')
             if 'yz' in plane_type:
+                print("yz", c_plane['yz'].shape)
                 c += self.sample_plane_feature(p, self.preprocess_embeddings(embeddings, c_plane['yz'], embedding_mode), plane='yz')
+            print("c before transpose", c.shape)
             c = c.transpose(1, 2)
+        print("c after transpose", c.shape)
+
+        # c = self.preprocess_embeddings(embeddings, c, embedding_mode)
 
         p = p.float()
         net = self.fc_p(p)

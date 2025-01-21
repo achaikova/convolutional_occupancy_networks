@@ -32,6 +32,7 @@ def get_model(cfg, device=None, dataset=None, **kwargs):
     embedding_mode = cfg['model'].get('embedding_mode', 'none')
     embedding_dim = cfg['model'].get('embedding_dim', 0)
     num_classes = cfg['model'].get('num_classes', 0)
+    embedding_model = cfg['model'].get('embedding_model', None)
 
     c_dim_decoder = c_dim
     if embedding_dim > 0 and embedding_mode == 'cat':
@@ -60,12 +61,14 @@ def get_model(cfg, device=None, dataset=None, **kwargs):
                 encoder_kwargs['grid_resolution'] = update_reso(reso, dataset.depth)
             if bool(set(fea_type) & set(['xz', 'xy', 'yz'])):
                 encoder_kwargs['plane_resolution'] = update_reso(reso, dataset.depth)
+                decoder_kwargs['plane_resolution'] = update_reso(reso, dataset.depth)
         # if dataset.split == 'val': #TODO run validation in room level during training
         else:
             if 'grid' in fea_type:
                 encoder_kwargs['grid_resolution'] = dataset.total_reso
             if bool(set(fea_type) & set(['xz', 'xy', 'yz'])):
                 encoder_kwargs['plane_resolution'] = dataset.total_reso
+                decoder_kwargs['plane_resolution'] = dataset.total_reso
     
 
     # Initialize decoder
@@ -91,7 +94,8 @@ def get_model(cfg, device=None, dataset=None, **kwargs):
         decoder, encoder, device=device,
         embedding_mode=embedding_mode,
         num_classes=num_classes,
-        embedding_dim=embedding_dim
+        embedding_dim=embedding_dim,
+        embedding_model=embedding_model
     )
 
     return model

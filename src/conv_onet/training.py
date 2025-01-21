@@ -65,7 +65,9 @@ class Trainer(BaseTrainer):
         points = data.get('points').to(device)
         occ = data.get('points.occ').to(device)
         inputs = data.get('inputs', torch.empty(points.size(0), 0)).to(device)
-        labels = data.get('category_id').to(device)
+        category_id = data.get('category_id').to(device)
+        category_name = data.get('category_name')
+        labels = {'category_id': category_id, 'category_name': category_name}
         voxels_occ = data.get('voxels')
 
         points_iou = data.get('points_iou').to(device)
@@ -126,7 +128,9 @@ class Trainer(BaseTrainer):
         p = data.get('points').to(device)
         occ = data.get('points.occ').to(device)
         inputs = data.get('inputs', torch.empty(p.size(0), 0)).to(device)
-        labels = data.get('category_id').to(device)
+        category_id = data.get('category_id').to(device)
+        category_name = data.get('category_name')
+        labels = {'category_id': category_id, 'category_name': category_name}
         
         if 'pointcloud_crop' in data.keys():
             # add pre-computed index

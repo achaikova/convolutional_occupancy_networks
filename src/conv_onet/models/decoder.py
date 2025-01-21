@@ -20,7 +20,7 @@ class LocalDecoder(nn.Module):
     '''
 
     def __init__(self, dim=3, c_dim=128,
-                 hidden_size=256, n_blocks=5, leaky=False, sample_mode='bilinear', padding=0.1):
+                 hidden_size=256, n_blocks=5, leaky=False, sample_mode='bilinear', padding=0.1, plane_resolution=64):
         super().__init__()
         self.c_dim = c_dim
         self.n_blocks = n_blocks
@@ -46,6 +46,7 @@ class LocalDecoder(nn.Module):
 
         self.sample_mode = sample_mode
         self.padding = padding
+        self.reso_plane = plane_resolution
     
 
     def sample_plane_feature(self, p, c, plane='xz'):
@@ -65,9 +66,9 @@ class LocalDecoder(nn.Module):
 
     def preprocess_embeddings(self, embeddings, c, embedding_mode):
         if embeddings is not None:
-            embeddings = embeddings.unsqueeze(1).expand(-1, c.size(1), -1)
+            embeddings = embeddings.unsqueeze(-1).unsqueeze(-1).expand(-1, -1, self.reso_plane, self.reso_plane)
             if embedding_mode == 'cat':
-                c = torch.cat([c, embeddings], dim=-1)
+                c = torch.cat([c, embeddings], dim=1)
             elif embedding_mode == 'add':
                 if embeddings.shape != c.shape:
                     raise ValueError(f'Embedding dimension ({embeddings.shape}) must match point dimension ({c.shape}) for addition mode')
@@ -75,25 +76,18 @@ class LocalDecoder(nn.Module):
         return c
 
     def forward(self, p, c_plane, embeddings=None, embedding_mode='none', **kwargs):
-        print("embeddings", embeddings.shape)
         if self.c_dim != 0:
             plane_type = list(c_plane.keys())
             c = 0
             if 'grid' in plane_type:
-                print("grid", c_plane['grid'].shape)
                 c += self.sample_grid_feature(p, self.preprocess_embeddings(embeddings, c_plane['grid'], embedding_mode))
             if 'xz' in plane_type:
-                print("xz", c_plane['xz'].shape)
                 c += self.sample_plane_feature(p, self.preprocess_embeddings(embeddings, c_plane['xz'], embedding_mode), plane='xz')
             if 'xy' in plane_type:
-                print("xy", c_plane['xy'].shape)
                 c += self.sample_plane_feature(p, self.preprocess_embeddings(embeddings, c_plane['xy'], embedding_mode), plane='xy')
             if 'yz' in plane_type:
-                print("yz", c_plane['yz'].shape)
                 c += self.sample_plane_feature(p, self.preprocess_embeddings(embeddings, c_plane['yz'], embedding_mode), plane='yz')
-            print("c before transpose", c.shape)
             c = c.transpose(1, 2)
-        print("c after transpose", c.shape)
 
         # c = self.preprocess_embeddings(embeddings, c, embedding_mode)
 

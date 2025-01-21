@@ -4,6 +4,7 @@ from torch.utils import data
 import numpy as np
 import yaml
 from src.common import decide_total_volume_range, update_reso
+import torch
 
 
 logger = logging.getLogger(__name__)
@@ -141,7 +142,12 @@ class Shapes3dDataset(data.Dataset):
         c_idx = self.metadata[category]['idx']
 
         model_path = os.path.join(self.dataset_folder, category, model)
-        data = {}
+        data = {
+            'category_id': torch.tensor(c_idx, dtype=torch.long),
+            'category_name': category,
+            'category_label': self.metadata[category]['name']  # human-readable name from metadata
+        }
+
 
         if self.cfg['data']['input_type'] == 'pointcloud_crop':
             info = self.get_vol_info(model_path)

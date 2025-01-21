@@ -64,7 +64,7 @@ class LocalDecoder(nn.Module):
         return c
 
 
-    def forward(self, p, c_plane, **kwargs):
+    def forward(self, p, c_plane, embeddings=None, embedding_mode='none', **kwargs):
         if self.c_dim != 0:
             plane_type = list(c_plane.keys())
             c = 0
@@ -79,6 +79,14 @@ class LocalDecoder(nn.Module):
             c = c.transpose(1, 2)
 
         p = p.float()
+        if embeddings is not None:
+            if embedding_mode == 'decoder_cat':
+                p = torch.cat([p, embeddings], dim=1)
+            elif embedding_mode == 'decoder_add':
+                if embeddings.shape != p.shape:
+                    raise ValueError(f'Embedding dimension ({embeddings.shape}) must match point dimension ({p.shape}) for addition mode')
+                p = p + embeddings
+
         net = self.fc_p(p)
 
         for i in range(self.n_blocks):

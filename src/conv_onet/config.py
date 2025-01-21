@@ -28,6 +28,21 @@ def get_model(cfg, device=None, dataset=None, **kwargs):
     encoder_kwargs = cfg['model']['encoder_kwargs']
     padding = cfg['data']['padding']
     
+    # Get embedding configuration
+    embedding_mode = cfg['model'].get('embedding_mode', 'none')
+    embedding_dim = cfg['model'].get('embedding_dim', 0)
+    num_classes = cfg['model'].get('num_classes', 0)
+
+    # Adjust dimensions based on where embeddings will be used
+    if embedding_dim > 0 and embedding_mode != 'none':
+        if embedding_mode == 'encoder_cat':
+            # For encoder mode, increase input point dimension
+            dim = dim + embedding_dim
+        elif embedding_mode == 'decoder_cat':
+            # For decoder mode, increase feature dimension
+            c_dim = c_dim + embedding_dim
+            decoder_kwargs['c_dim'] = c_dim
+    
     # for pointcloud_crop
     try: 
         encoder_kwargs['unit_size'] = cfg['data']['unit_size']
@@ -60,23 +75,30 @@ def get_model(cfg, device=None, dataset=None, **kwargs):
                 encoder_kwargs['plane_resolution'] = dataset.total_reso
     
 
+    # Initialize decoder
     decoder = models.decoder_dict[decoder](
         dim=dim, c_dim=c_dim, padding=padding,
         **decoder_kwargs
     )
 
+    # Initialize encoder
     if encoder == 'idx':
         encoder = nn.Embedding(len(dataset), c_dim)
     elif encoder is not None:
         encoder = encoder_dict[encoder](
-            dim=dim, c_dim=c_dim, padding=padding,
+            dim=dim,  # Input dimension (points + embeddings if encoder mode)
+            c_dim=c_dim,  # Output dimension (unchanged for encoder mode)
+            padding=padding,
             **encoder_kwargs
         )
     else:
         encoder = None
 
     model = models.ConvolutionalOccupancyNetwork(
-        decoder, encoder, device=device
+        decoder, encoder, device=device,
+        embedding_mode=embedding_mode,
+        num_classes=num_classes,
+        embedding_dim=embedding_dim
     )
 
     return model

@@ -41,6 +41,9 @@ class ConvolutionalOccupancyNetwork(nn.Module):
         self.embedding_model = embedding_model
         if embedding_model is not None:
             self.label_embedding = SentenceTransformer(embedding_model).to(device)
+            # Freeze the embedding model
+            for param in self.label_embedding.parameters():
+                param.requires_grad = False
             self.reduce_embedding = nn.ModuleList([
                 nn.Linear(384, 128).to(device),
                 nn.Linear(128, 32).to(device)
@@ -60,7 +63,6 @@ class ConvolutionalOccupancyNetwork(nn.Module):
             embeddings = self.label_embedding.encode(labels['category_name'])
             if len(embeddings.shape) == 3:
                 embeddings = embeddings.mean(axis=1)
-            print("embeddings after mean", embeddings.shape)
             embeddings = torch.tensor(embeddings).to(self._device)
             embeddings = self.reduce_embedding[0](embeddings)
             embeddings = self.reduce_embedding[1](embeddings)

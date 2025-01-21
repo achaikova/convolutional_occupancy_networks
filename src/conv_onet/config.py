@@ -33,17 +33,10 @@ def get_model(cfg, device=None, dataset=None, **kwargs):
     embedding_dim = cfg['model'].get('embedding_dim', 0)
     num_classes = cfg['model'].get('num_classes', 0)
 
-    # Adjust dimensions based on where embeddings will be used
-    if embedding_dim > 0 and embedding_mode != 'none':
-        if embedding_mode == 'encoder_cat':
-            # For encoder mode, increase input point dimension
-            dim = dim + embedding_dim
-        elif embedding_mode == 'decoder_cat':
-            # For decoder mode, increase feature dimension
-            c_dim = c_dim + embedding_dim
-            decoder_kwargs['c_dim'] = c_dim
+    c_dim_decoder = c_dim
+    if embedding_dim > 0 and embedding_mode == 'add':
+        c_dim_decoder += embedding_dim
     
-    # for pointcloud_crop
     try: 
         encoder_kwargs['unit_size'] = cfg['data']['unit_size']
         decoder_kwargs['unit_size'] = cfg['data']['unit_size']
@@ -77,7 +70,7 @@ def get_model(cfg, device=None, dataset=None, **kwargs):
 
     # Initialize decoder
     decoder = models.decoder_dict[decoder](
-        dim=dim, c_dim=c_dim, padding=padding,
+        dim=dim, c_dim=c_dim_decoder, padding=padding,
         **decoder_kwargs
     )
 
@@ -86,8 +79,8 @@ def get_model(cfg, device=None, dataset=None, **kwargs):
         encoder = nn.Embedding(len(dataset), c_dim)
     elif encoder is not None:
         encoder = encoder_dict[encoder](
-            dim=dim,  # Input dimension (points + embeddings if encoder mode)
-            c_dim=c_dim,  # Output dimension (unchanged for encoder mode)
+            dim=dim, 
+            c_dim=c_dim,
             padding=padding,
             **encoder_kwargs
         )

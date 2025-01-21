@@ -116,7 +116,7 @@ class LocalPoolPointnet(nn.Module):
         return c_out.permute(0, 2, 1)
 
 
-    def forward(self, p, embeddings=None, embedding_mode='none'):
+    def forward(self, p):
         batch_size, T, D = p.size()
 
         # acquire the index for each point
@@ -135,13 +135,15 @@ class LocalPoolPointnet(nn.Module):
             coord['grid'] = normalize_3d_coordinate(p.clone(), padding=self.padding)
             index['grid'] = coordinate2index(coord['grid'], self.reso_grid, coord_type='3d')
 
-        if embeddings is not None:
-            if embedding_mode == 'encoder_cat':
-                inputs = torch.cat([inputs, embeddings], dim=1)
-            elif embedding_mode == 'encoder_add':
-                if embeddings.shape != p.shape:
-                    raise ValueError(f'Embedding dimension ({embeddings.shape}) must match point dimension ({p.shape}) for addition mode')
-                p = p + embeddings
+        # inputs = p
+        # if embeddings is not None:
+        #     embeddings = embeddings.unsqueeze(1).expand(-1, p.size(1), -1)
+        #     if embedding_mode == 'encoder_cat':
+        #         inputs = torch.cat([inputs, embeddings], dim=-1)
+        #     elif embedding_mode == 'encoder_add':
+        #         if embeddings.shape != inputs.shape:
+        #             raise ValueError(f'Embedding dimension ({embeddings.shape}) must match point dimension ({inputs.shape}) for addition mode')
+        #         inputs = inputs + embeddings
         
         net = self.fc_pos(p)
 

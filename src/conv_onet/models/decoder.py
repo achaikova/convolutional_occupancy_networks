@@ -63,30 +63,33 @@ class LocalDecoder(nn.Module):
         c = F.grid_sample(c, vgrid, padding_mode='border', align_corners=True, mode=self.sample_mode).squeeze(-1).squeeze(-1)
         return c
 
+    def preprocess_embeddings(self, embeddings, c, embedding_mode):
+        if embeddings is not None:
+            embeddings = embeddings.unsqueeze(1).expand(-1, c.size(1), -1)
+            if embedding_mode == 'cat':
+                c = torch.cat([c, embeddings], dim=-1)
+            elif embedding_mode == 'add':
+                if embeddings.shape != c.shape:
+                    raise ValueError(f'Embedding dimension ({embeddings.shape}) must match point dimension ({c.shape}) for addition mode')
+                c = c + embeddings
+        return c
 
     def forward(self, p, c_plane, embeddings=None, embedding_mode='none', **kwargs):
+
         if self.c_dim != 0:
             plane_type = list(c_plane.keys())
             c = 0
             if 'grid' in plane_type:
-                c += self.sample_grid_feature(p, c_plane['grid'])
+                c += self.sample_grid_feature(p, self.preprocess_embeddings(embeddings, c_plane['grid'], embedding_mode))
             if 'xz' in plane_type:
-                c += self.sample_plane_feature(p, c_plane['xz'], plane='xz')
+                c += self.sample_plane_feature(p, self.preprocess_embeddings(embeddings, c_plane['xz'], embedding_mode), plane='xz')
             if 'xy' in plane_type:
-                c += self.sample_plane_feature(p, c_plane['xy'], plane='xy')
+                c += self.sample_plane_feature(p, self.preprocess_embeddings(embeddings, c_plane['xy'], embedding_mode), plane='xy')
             if 'yz' in plane_type:
-                c += self.sample_plane_feature(p, c_plane['yz'], plane='yz')
+                c += self.sample_plane_feature(p, self.preprocess_embeddings(embeddings, c_plane['yz'], embedding_mode), plane='yz')
             c = c.transpose(1, 2)
 
         p = p.float()
-        if embeddings is not None:
-            if embedding_mode == 'decoder_cat':
-                p = torch.cat([p, embeddings], dim=1)
-            elif embedding_mode == 'decoder_add':
-                if embeddings.shape != p.shape:
-                    raise ValueError(f'Embedding dimension ({embeddings.shape}) must match point dimension ({p.shape}) for addition mode')
-                p = p + embeddings
-
         net = self.fc_p(p)
 
         for i in range(self.n_blocks):

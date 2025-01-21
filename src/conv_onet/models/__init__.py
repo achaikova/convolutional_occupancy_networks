@@ -62,7 +62,7 @@ class ConvolutionalOccupancyNetwork(nn.Module):
         if self.label_embedding is not None and labels is not None:
             embeddings = self.label_embedding(labels)
 
-        c = self.encode_inputs(inputs, embeddings=embeddings, embedding_mode=self.embedding_mode)
+        c = self.encode_inputs(inputs)
 
         p_r = self.decode(p, c, embeddings=embeddings, embedding_mode=self.embedding_mode, **kwargs)
         return p_r
@@ -77,14 +77,14 @@ class ConvolutionalOccupancyNetwork(nn.Module):
         '''
 
         if self.encoder is not None:
-            c = self.encoder(inputs, embeddings=embeddings, embedding_mode=embedding_mode)
+            c = self.encoder(inputs)
         else:
             # Return inputs?
             c = torch.empty(inputs.size(0), 0)
 
         return c
 
-    def decode(self, p, c, , embeddings=None, embedding_mode='none', **kwargs):
+    def decode(self, p, c, embeddings=None, embedding_mode='none', **kwargs):
         ''' Returns occupancy probabilities for the sampled points.
 
         Args:
@@ -110,7 +110,7 @@ class ConvolutionalOccupancyNetwork(nn.Module):
 class LabelEmbedding(nn.Module):
     def __init__(self, num_classes: int, embedding_dim: int):
         super().__init__()
-        self.embedding = nn.Embedding(num_classes, embedding_dim, sparse=True)
+        self.embedding = nn.Embedding(num_classes, embedding_dim)
     
     def forward(self, labels):
         return self.embedding(labels)

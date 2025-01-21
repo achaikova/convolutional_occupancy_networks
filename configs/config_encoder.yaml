@@ -31,7 +31,7 @@ model:
   num_classes: 3    # number of classes in the dataset
 training:
   out_dir:  out/pointcloud/shapenet_3plane_minilm_cat_3class
-  batch_size: 8
+  batch_size: 64
   print_every: 100
   visualize_every: 1000
   checkpoint_every: 1000

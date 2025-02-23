@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from src.layers import ResnetBlockFC
-from src.common import normalize_coordinate, normalize_3d_coordinate, map2local
+from src.common import normalize_coordinate, normalize_3d_coordinate, map2local, positional_encoding
 
 
 class LocalDecoder(nn.Module):
@@ -20,18 +20,32 @@ class LocalDecoder(nn.Module):
     '''
 
     def __init__(self, dim=3, c_dim=128,
-                 hidden_size=256, n_blocks=5, leaky=False, sample_mode='bilinear', padding=0.1, plane_resolution=64):
+                 hidden_size=256, n_blocks=5, leaky=False, sample_mode='bilinear', padding=0.1, plane_resolution=64,unit_size=0.1, local_coord=False, pos_encoding='linear', L=10
+                 ,use_siren=False, w0=30):
         super().__init__()
         self.c_dim = c_dim
         self.n_blocks = n_blocks
-
+        self.use_siren = use_siren
+        self.w0 = w0
         if c_dim != 0:
             self.fc_c = nn.ModuleList([
                 nn.Linear(c_dim, hidden_size) for i in range(n_blocks)
             ])
 
-
-        self.fc_p = nn.Linear(dim, hidden_size)
+        if local_coord:
+            print('local_coord!')
+            self.map2local = map2local(unit_size)
+        else:
+            self.map2local = None
+        self.pos_encoding = pos_encoding
+        if pos_encoding == 'sin_cos':
+            print('Pos_encod!')
+            input_dim = 3 * 2 * L  # 3D * (sin+cos) * L frequencies
+            self.pe = positional_encoding(basis_function=pos_encoding,L=L)
+        else:
+            input_dim = dim
+            self.pe = None
+        self.fc_p = nn.Linear(input_dim, hidden_size)
 
         self.blocks = nn.ModuleList([
             ResnetBlockFC(hidden_size) for i in range(n_blocks)
@@ -39,7 +53,9 @@ class LocalDecoder(nn.Module):
 
         self.fc_out = nn.Linear(hidden_size, 1)
 
-        if not leaky:
+        if self.use_siren:
+            self.actvn = torch.sin
+        elif not leaky:
             self.actvn = F.relu
         else:
             self.actvn = lambda x: F.leaky_relu(x, 0.2)
@@ -92,6 +108,11 @@ class LocalDecoder(nn.Module):
         # c = self.preprocess_embeddings(embeddings, c, embedding_mode)
 
         p = p.float()
+
+        if self.map2local:
+            p = self.map2local(p)
+        if self.pe:
+            p = self.pe(p)  # Expands to 60D if 'sin_cos'
         net = self.fc_p(p)
 
         for i in range(self.n_blocks):
@@ -125,11 +146,15 @@ class PatchLocalDecoder(nn.Module):
     '''
 
     def __init__(self, dim=3, c_dim=128,
-                 hidden_size=256, leaky=False, n_blocks=5, sample_mode='bilinear', local_coord=False, pos_encoding='linear', unit_size=0.1, padding=0.1):
+                 hidden_size=256, leaky=False, n_blocks=5, sample_mode='bilinear', local_coord=False, pos_encoding='linear', unit_size=0.1, padding=0.1, L=10,
+                 use_siren=False, w0=30):
         super().__init__()
         self.c_dim = c_dim
         self.n_blocks = n_blocks
-
+        self.L = L
+        
+        self.use_siren = use_siren
+        self.w0 = w0
         if c_dim != 0:
             self.fc_c = nn.ModuleList([
                 nn.Linear(c_dim, hidden_size) for i in range(n_blocks)
@@ -141,7 +166,9 @@ class PatchLocalDecoder(nn.Module):
             ResnetBlockFC(hidden_size) for i in range(n_blocks)
         ])
 
-        if not leaky:
+        if self.use_siren:
+            self.actvn = torch.sin
+        elif not leaky:
             self.actvn = F.relu
         else:
             self.actvn = lambda x: F.leaky_relu(x, 0.2)
@@ -152,11 +179,14 @@ class PatchLocalDecoder(nn.Module):
             self.map2local = map2local(unit_size, pos_encoding=pos_encoding)
         else:
             self.map2local = None
-
+        self.pos_encoding = pos_encoding
         if pos_encoding == 'sin_cos':
-            self.fc_p = nn.Linear(60, hidden_size)
+            input_dim = 3 * 2 * L  # 3D * (sin+cos) * L frequencies
+            self.pe = positional_encoding(basis_function=pos_encoding,L=L)
         else:
-            self.fc_p = nn.Linear(dim, hidden_size)
+            input_dim = dim
+            self.pe = None
+        self.fc_p = nn.Linear(input_dim, hidden_size)
     
     def sample_feature(self, xy, c, fea_type='2d'):
         if fea_type == '2d':
@@ -189,7 +219,8 @@ class PatchLocalDecoder(nn.Module):
         p = p.float()
         if self.map2local:
             p = self.map2local(p)
-        
+        if self.pe:
+            p = self.pe(p)  # Expands to 60D if 'sin_cos'
         net = self.fc_p(p)
         for i in range(self.n_blocks):
             if self.c_dim != 0:

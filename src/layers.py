@@ -12,7 +12,7 @@ class ResnetBlockFC(nn.Module):
         size_h (int): hidden dimension
     '''
 
-    def __init__(self, size_in, size_out=None, size_h=None):
+    def __init__(self, size_in, size_out=None, size_h=None, use_siren=False):
         super().__init__()
         # Attributes
         if size_out is None:
@@ -27,7 +27,11 @@ class ResnetBlockFC(nn.Module):
         # Submodules
         self.fc_0 = nn.Linear(size_in, size_h)
         self.fc_1 = nn.Linear(size_h, size_out)
-        self.actvn = nn.ReLU()
+        self.use_siren = use_siren
+        if use_siren:
+            self.actvn = torch.sin
+        else:
+            self.actvn = nn.ReLU()
 
         if size_in == size_out:
             self.shortcut = None

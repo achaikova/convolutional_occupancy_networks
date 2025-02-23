@@ -403,17 +403,14 @@ class map2local(object):
 
     Args:
         s (float): the defined voxel size
-        pos_encoding (str): method for the positional encoding, linear|sin_cos
+        pos_encoding (str): method for the positional encoding, linear|sin_cos ----X NO 
     '''
-    def __init__(self, s, pos_encoding='linear'):
+    def __init__(self, s):
         super().__init__()
         self.s = s
-        self.pe = positional_encoding(basis_function=pos_encoding)
-
     def __call__(self, p):
         p = torch.remainder(p, self.s) / self.s # always possitive
         # p = torch.fmod(p, self.s) / self.s # same sign as input p!
-        p = self.pe(p)
         return p
 
 class positional_encoding(object):
@@ -422,11 +419,10 @@ class positional_encoding(object):
     Args:
         basis_function (str): basis function
     '''
-    def __init__(self, basis_function='sin_cos'):
+    def __init__(self, basis_function='sin_cos',L=10):
         super().__init__()
         self.func = basis_function
 
-        L = 10
         freq_bands = 2.**(np.linspace(0, L-1, L))
         self.freq_bands = freq_bands * math.pi
 
@@ -439,3 +435,26 @@ class positional_encoding(object):
                 out.append(torch.cos(freq * p))
             p = torch.cat(out, dim=2)
         return p
+    
+
+def siren_init(m, w0=30.0, is_first=False):
+    """
+    Initialize a layer according to SIREN initialization rules.
+    
+    Args:
+        m (nn.Module): The module (typically nn.Linear) to initialize.
+        w0 (float): The frequency scale for SIREN (default is 30).
+        is_first (bool): Whether this is the first layer in the network.
+    """
+    if isinstance(m, nn.Linear):
+        in_features = m.weight.size(1)
+        with torch.no_grad():
+            # First layer has a special initialization
+            if is_first:
+                m.weight.uniform_(-1 / in_features, 1 / in_features)
+            else:
+                limit = math.sqrt(6 / in_features) / w0
+                m.weight.uniform_(-limit, limit)
+            
+            if m.bias is not None:
+                m.bias.fill_(0.0)

@@ -46,7 +46,7 @@ class ConvolutionalOccupancyNetwork(nn.Module):
                 nn.Linear(128, 32).to(device)
             ]).to(device)
             
-        else
+        else:
             if embedding_mode != 'none' and num_classes > 0 and embedding_dim > 0:
                 self.label_embedding = LabelEmbedding(num_classes, embedding_dim).to(device)
             else:

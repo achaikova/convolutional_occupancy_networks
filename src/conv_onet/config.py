@@ -7,7 +7,7 @@ from src.conv_onet import models, training
 from src.conv_onet import generation
 from src import data
 from src import config
-from src.common import decide_total_volume_range, update_reso
+from src.common import decide_total_volume_range, update_reso, siren_init
 from torchvision import transforms
 import numpy as np
 
@@ -27,6 +27,21 @@ def get_model(cfg, device=None, dataset=None, **kwargs):
     decoder_kwargs = cfg['model']['decoder_kwargs']
     encoder_kwargs = cfg['model']['encoder_kwargs']
     padding = cfg['data']['padding']
+
+    try: 
+        encoder_kwargs['unit_size'] = cfg['data']['unit_size']
+        decoder_kwargs['unit_size'] = cfg['data']['unit_size']
+    except:
+        pass
+    # local positional encoding
+    if 'local_coord' in cfg['model'].keys():
+        if cfg['model']['local_coord']:
+            encoder_kwargs['local_coord'] = cfg['model']['local_coord']
+            decoder_kwargs['local_coord'] = cfg['model']['local_coord']
+    if 'pos_encoding' in cfg['model']:
+        encoder_kwargs['pos_encoding'] = cfg['model']['pos_encoding']
+        decoder_kwargs['pos_encoding'] = cfg['model']['pos_encoding']
+
     
     # Get embedding configuration
     embedding_mode = cfg['model'].get('embedding_mode', 'none')
@@ -38,18 +53,6 @@ def get_model(cfg, device=None, dataset=None, **kwargs):
     if embedding_dim > 0 and embedding_mode == 'cat':
         c_dim_decoder += embedding_dim
     
-    try: 
-        encoder_kwargs['unit_size'] = cfg['data']['unit_size']
-        decoder_kwargs['unit_size'] = cfg['data']['unit_size']
-    except:
-        pass
-    # local positional encoding
-    if 'local_coord' in cfg['model'].keys():
-        encoder_kwargs['local_coord'] = cfg['model']['local_coord']
-        decoder_kwargs['local_coord'] = cfg['model']['local_coord']
-    if 'pos_encoding' in cfg['model']:
-        encoder_kwargs['pos_encoding'] = cfg['model']['pos_encoding']
-        decoder_kwargs['pos_encoding'] = cfg['model']['pos_encoding']
 
     # update the feature volume/plane resolution
     if cfg['data']['input_type'] == 'pointcloud_crop':
@@ -76,6 +79,8 @@ def get_model(cfg, device=None, dataset=None, **kwargs):
         dim=dim, c_dim=c_dim_decoder, padding=padding,
         **decoder_kwargs
     )
+    if decoder_kwargs.get('use_siren', False):
+        decoder.apply(lambda m: siren_init(m, w0=decoder_kwargs['w0'], is_first=isinstance(m, nn.Linear) and m == decoder.fc_p))
 
     # Initialize encoder
     if encoder == 'idx':

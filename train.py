@@ -131,7 +131,7 @@ print('Total number of parameters: %d' % nparameters)
 
 print('output path: ', cfg['training']['out_dir'])
 
-while True:
+while it <= 10_100:
     epoch_it += 1
 
     for batch in train_loader:

@@ -11,7 +11,6 @@ from src.training import BaseTrainer
 
 class Trainer(BaseTrainer):
     ''' Trainer object for the Occupancy Network.
-
     Args:
         model (nn.Module): Occupancy Network model
         optimizer (optimizer): pytorch optimizer object
@@ -20,7 +19,6 @@ class Trainer(BaseTrainer):
         vis_dir (str): visualization directory
         threshold (float): threshold value
         eval_sample (bool): whether to evaluate samples
-
     '''
 
     def __init__(self, model, optimizer, device=None, input_type='pointcloud',
@@ -38,7 +36,6 @@ class Trainer(BaseTrainer):
 
     def train_step(self, data):
         ''' Performs a training step.
-
         Args:
             data (dict): data dictionary
         '''
@@ -49,10 +46,9 @@ class Trainer(BaseTrainer):
         self.optimizer.step()
 
         return loss.item()
-    
+
     def eval_step(self, data):
         ''' Performs an evaluation step.
-
         Args:
             data (dict): data dictionary
         '''
@@ -72,11 +68,11 @@ class Trainer(BaseTrainer):
 
         points_iou = data.get('points_iou').to(device)
         occ_iou = data.get('points_iou.occ').to(device)
-        
+
         batch_size = points.size(0)
 
         kwargs = {}
-        
+
         # add pre-computed index
         inputs = add_key(inputs, data.get('inputs.ind'), 'points', 'index', device=device)
         # add pre-computed normalized coordinates
@@ -120,7 +116,6 @@ class Trainer(BaseTrainer):
 
     def compute_loss(self, data):
         ''' Computes the loss.
-
         Args:
             data (dict): data dictionary
         '''

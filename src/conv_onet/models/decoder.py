@@ -8,7 +8,6 @@ from src.common import normalize_coordinate, normalize_3d_coordinate, map2local,
 class LocalDecoder(nn.Module):
     ''' Decoder.
         Instead of conditioning on global features, on plane/volume local features.
-
     Args:
         dim (int): input dimension
         c_dim (int): dimension of latent conditioned code c
@@ -63,7 +62,7 @@ class LocalDecoder(nn.Module):
         self.sample_mode = sample_mode
         self.padding = padding
         self.reso_plane = plane_resolution
-    
+
 
     def sample_plane_feature(self, p, c, plane='xz'):
         xy = normalize_coordinate(p.clone(), plane=plane, padding=self.padding) # normalize to the range of (0, 1)
@@ -92,18 +91,25 @@ class LocalDecoder(nn.Module):
         return c
 
     def forward(self, p, c_plane, embeddings=None, embedding_mode='none', **kwargs):
+        # print("embeddings", embeddings.shape)
         if self.c_dim != 0:
             plane_type = list(c_plane.keys())
             c = 0
             if 'grid' in plane_type:
+                # print("grid", c_plane['grid'].shape)
                 c += self.sample_grid_feature(p, self.preprocess_embeddings(embeddings, c_plane['grid'], embedding_mode))
             if 'xz' in plane_type:
+                # print("xz", c_plane['xz'].shape)
                 c += self.sample_plane_feature(p, self.preprocess_embeddings(embeddings, c_plane['xz'], embedding_mode), plane='xz')
             if 'xy' in plane_type:
+                # print("xy", c_plane['xy'].shape)
                 c += self.sample_plane_feature(p, self.preprocess_embeddings(embeddings, c_plane['xy'], embedding_mode), plane='xy')
             if 'yz' in plane_type:
+                # print("yz", c_plane['yz'].shape)
                 c += self.sample_plane_feature(p, self.preprocess_embeddings(embeddings, c_plane['yz'], embedding_mode), plane='yz')
+            # print("c before transpose", c.shape)
             c = c.transpose(1, 2)
+        # c = self.preprocess_embeddings(embeddings, c, embedding_mode)
 
         # c = self.preprocess_embeddings(embeddings, c, embedding_mode)
 
@@ -130,7 +136,6 @@ class LocalDecoder(nn.Module):
 class PatchLocalDecoder(nn.Module):
     ''' Decoder adapted for crop training.
         Instead of conditioning on global features, on plane/volume local features.
-
     Args:
         dim (int): input dimension
         c_dim (int): dimension of latent conditioned code c
@@ -142,7 +147,6 @@ class PatchLocalDecoder(nn.Module):
         unit_size (float): defined voxel unit size for local system
         pos_encoding (str): method for the positional encoding, linear|sin_cos
         padding (float): conventional padding paramter of ONet for unit cube, so [-0.5, 0.5] -> [-0.55, 0.55]
-
     '''
 
     def __init__(self, dim=3, c_dim=128,
@@ -184,10 +188,8 @@ class PatchLocalDecoder(nn.Module):
             input_dim = 3 * 2 * L  # 3D * (sin+cos) * L frequencies
             self.pe = positional_encoding(basis_function=pos_encoding,L=L)
         else:
-            input_dim = dim
-            self.pe = None
-        self.fc_p = nn.Linear(input_dim, hidden_size)
-    
+            self.fc_p = nn.Linear(dim, hidden_size)
+  
     def sample_feature(self, xy, c, fea_type='2d'):
         if fea_type == '2d':
             xy = xy[:, :, None].float()
@@ -219,8 +221,6 @@ class PatchLocalDecoder(nn.Module):
         p = p.float()
         if self.map2local:
             p = self.map2local(p)
-        if self.pe:
-            p = self.pe(p)  # Expands to 60D if 'sin_cos'
         net = self.fc_p(p)
         for i in range(self.n_blocks):
             if self.c_dim != 0:
@@ -234,7 +234,6 @@ class PatchLocalDecoder(nn.Module):
 
 class LocalPointDecoder(nn.Module):
     ''' Decoder for PointConv Baseline.
-
     Args:
         dim (int): input dimension
         c_dim (int): dimension of latent conditioned code c

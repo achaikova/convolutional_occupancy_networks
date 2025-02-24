@@ -14,7 +14,6 @@ import numpy as np
 
 def get_model(cfg, device=None, dataset=None, **kwargs):
     ''' Return the Occupancy Network model.
-
     Args:
         cfg (dict): imported yaml config 
         device (device): pytorch device
@@ -27,6 +26,16 @@ def get_model(cfg, device=None, dataset=None, **kwargs):
     decoder_kwargs = cfg['model']['decoder_kwargs']
     encoder_kwargs = cfg['model']['encoder_kwargs']
     padding = cfg['data']['padding']
+
+    # Get embedding configuration
+    embedding_mode = cfg['model'].get('embedding_mode', 'none')
+    embedding_dim = cfg['model'].get('embedding_dim', 0)
+    num_classes = cfg['model'].get('num_classes', 0)
+    embedding_model = cfg['model'].get('embedding_model', None)
+    
+    c_dim_decoder = c_dim
+    if embedding_dim > 0 and embedding_mode == 'cat':
+        c_dim_decoder += embedding_dim
 
     try: 
         encoder_kwargs['unit_size'] = cfg['data']['unit_size']
@@ -65,6 +74,7 @@ def get_model(cfg, device=None, dataset=None, **kwargs):
             if bool(set(fea_type) & set(['xz', 'xy', 'yz'])):
                 encoder_kwargs['plane_resolution'] = update_reso(reso, dataset.depth)
                 decoder_kwargs['plane_resolution'] = update_reso(reso, dataset.depth)
+
         # if dataset.split == 'val': #TODO run validation in room level during training
         else:
             if 'grid' in fea_type:
@@ -72,7 +82,6 @@ def get_model(cfg, device=None, dataset=None, **kwargs):
             if bool(set(fea_type) & set(['xz', 'xy', 'yz'])):
                 encoder_kwargs['plane_resolution'] = dataset.total_reso
                 decoder_kwargs['plane_resolution'] = dataset.total_reso
-    
 
     # Initialize decoder
     decoder = models.decoder_dict[decoder](
@@ -108,7 +117,6 @@ def get_model(cfg, device=None, dataset=None, **kwargs):
 
 def get_trainer(model, optimizer, cfg, device, **kwargs):
     ''' Returns the trainer object.
-
     Args:
         model (nn.Module): the Occupancy Network model
         optimizer (optimizer): pytorch optimizer object
@@ -132,13 +140,12 @@ def get_trainer(model, optimizer, cfg, device, **kwargs):
 
 def get_generator(model, cfg, device, **kwargs):
     ''' Returns the generator object.
-
     Args:
         model (nn.Module): Occupancy Network model
         cfg (dict): imported yaml config
         device (device): pytorch device
     '''
-    
+
     if cfg['data']['input_type'] == 'pointcloud_crop':
         # calculate the volume boundary
         query_vol_metric = cfg['data']['padding'] + 1
@@ -148,9 +155,9 @@ def get_generator(model, cfg, device, **kwargs):
             depth = cfg['model']['encoder_kwargs']['unet_kwargs']['depth']
         elif 'unet3d' in cfg['model']['encoder_kwargs']:
             depth = cfg['model']['encoder_kwargs']['unet3d_kwargs']['num_levels']
-        
+
         vol_info = decide_total_volume_range(query_vol_metric, recep_field, unit_size, depth)
-        
+
         grid_reso = cfg['data']['query_vol_size'] + recep_field - 1
         grid_reso = update_reso(grid_reso, depth)
         query_vol_size = cfg['data']['query_vol_size'] * unit_size
@@ -186,13 +193,12 @@ def get_generator(model, cfg, device, **kwargs):
 
 def get_data_fields(mode, cfg):
     ''' Returns the data fields.
-
     Args:
         mode (str): the mode which is used
         cfg (dict): imported yaml config
     '''
     points_transform = data.SubsamplePoints(cfg['data']['points_subsample'])
-    
+
     input_type = cfg['data']['input_type']
     fields = {}
     if cfg['data']['points_file'] is not None:
@@ -210,7 +216,7 @@ def get_data_fields(mode, cfg):
                 multi_files=cfg['data']['multi_files']
             )
 
-    
+
     if mode in ('val', 'test'):
         points_iou_file = cfg['data']['points_iou_file']
         voxels_file = cfg['data']['voxels_file']

@@ -198,6 +198,5 @@ def get_inputs_field(mode, cfg):
     elif input_type == 'idx':
         inputs_field = data.IndexField()
     else:
-        raise ValueError(
-            'Invalid input type (%s)' % input_type)
+        raise ValueError('Invalid input type (%s)' % input_type)
     return inputs_field

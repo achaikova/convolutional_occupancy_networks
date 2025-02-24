@@ -126,7 +126,7 @@ class Trainer(BaseTrainer):
         category_id = data.get('category_id').to(device)
         category_name = data.get('category_name')
         labels = {'category_id': category_id, 'category_name': category_name}
-
+        
         if 'pointcloud_crop' in data.keys():
             # add pre-computed index
             inputs = add_key(inputs, data.get('inputs.ind'), 'points', 'index', device=device)

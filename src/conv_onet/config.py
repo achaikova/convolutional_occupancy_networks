@@ -7,7 +7,7 @@ from src.conv_onet import models, training
 from src.conv_onet import generation
 from src import data
 from src import config
-from src.common import decide_total_volume_range, update_reso
+from src.common import decide_total_volume_range, update_reso, siren_init
 from torchvision import transforms
 import numpy as np
 
@@ -44,11 +44,24 @@ def get_model(cfg, device=None, dataset=None, **kwargs):
         pass
     # local positional encoding
     if 'local_coord' in cfg['model'].keys():
-        encoder_kwargs['local_coord'] = cfg['model']['local_coord']
-        decoder_kwargs['local_coord'] = cfg['model']['local_coord']
+        if cfg['model']['local_coord']:
+            encoder_kwargs['local_coord'] = cfg['model']['local_coord']
+            decoder_kwargs['local_coord'] = cfg['model']['local_coord']
     if 'pos_encoding' in cfg['model']:
         encoder_kwargs['pos_encoding'] = cfg['model']['pos_encoding']
         decoder_kwargs['pos_encoding'] = cfg['model']['pos_encoding']
+
+    
+    # Get embedding configuration
+    embedding_mode = cfg['model'].get('embedding_mode', 'none')
+    embedding_dim = cfg['model'].get('embedding_dim', 0)
+    num_classes = cfg['model'].get('num_classes', 0)
+    embedding_model = cfg['model'].get('embedding_model', None)
+
+    c_dim_decoder = c_dim
+    if embedding_dim > 0 and embedding_mode == 'cat':
+        c_dim_decoder += embedding_dim
+    
 
     # update the feature volume/plane resolution
     if cfg['data']['input_type'] == 'pointcloud_crop':
@@ -70,12 +83,13 @@ def get_model(cfg, device=None, dataset=None, **kwargs):
                 encoder_kwargs['plane_resolution'] = dataset.total_reso
                 decoder_kwargs['plane_resolution'] = dataset.total_reso
 
-
     # Initialize decoder
     decoder = models.decoder_dict[decoder](
         dim=dim, c_dim=c_dim_decoder, padding=padding,
         **decoder_kwargs
     )
+    if decoder_kwargs.get('use_siren', False):
+        decoder.apply(lambda m: siren_init(m, w0=decoder_kwargs['w0'], is_first=isinstance(m, nn.Linear) and m == decoder.fc_p))
 
     # Initialize encoder
     if encoder == 'idx':

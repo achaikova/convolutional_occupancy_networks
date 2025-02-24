@@ -27,6 +27,7 @@ class ConvolutionalOccupancyNetwork(nn.Module):
     def __init__(self, decoder, encoder=None, device=None, 
                  embedding_mode='none', num_classes=0, embedding_dim=0,
                 embedding_model=None):
+
         super().__init__()
 
         self.decoder = decoder.to(device)
@@ -41,9 +42,11 @@ class ConvolutionalOccupancyNetwork(nn.Module):
         self.embedding_model = embedding_model
         if embedding_model is not None:
             self.label_embedding = SentenceTransformer(embedding_model).to(device)
+
             # Freeze the embedding model
             for param in self.label_embedding.parameters():
                 param.requires_grad = False
+
             self.reduce_embedding = nn.ModuleList([
                 nn.Linear(384, 128).to(device),
                 nn.Linear(128, 32).to(device)
@@ -57,7 +60,6 @@ class ConvolutionalOccupancyNetwork(nn.Module):
 
         self._device = device
         self.embedding_mode = embedding_mode
-    
     def create_embeddings(self, labels):
         if self.embedding_model is not None:
             embeddings = self.label_embedding.encode(labels['category_name'])
@@ -78,7 +80,8 @@ class ConvolutionalOccupancyNetwork(nn.Module):
             p (tensor): sampled points
             inputs (tensor): conditioning input
             sample (bool): whether to sample for z
-            labels (dict): class labels for embedding        '''
+            labels (dict): class labels for embedding
+        '''
         if isinstance(p, dict):
             batch_size = p['p'].size(0)
         else:
@@ -95,6 +98,8 @@ class ConvolutionalOccupancyNetwork(nn.Module):
             inputs (tensor): the input
             embeddings (tensor): text embeddings if available
             embedding_mode (str): how to handle embeddings ('encoder_cat', 'encoder_add', 'none')
+
+
         '''
 
         if self.encoder is not None:
@@ -112,7 +117,6 @@ class ConvolutionalOccupancyNetwork(nn.Module):
             c (tensor): latent conditioned code c
             labels (dict): class labels for embedding
         '''
-        
         embeddings = self.create_embeddings(labels)
         logits = self.decoder(p, c, embeddings=embeddings, embedding_mode=self.embedding_mode, **kwargs)
         p_r = dist.Bernoulli(logits=logits)

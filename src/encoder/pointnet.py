@@ -132,7 +132,7 @@ class LocalPoolPointnet(nn.Module):
         for plane in ['xz', 'xy', 'yz', 'grid']:
             if plane in self.plane_type:
                 coord[plane] = normalize_coordinate(p.clone(), plane=plane, padding=self.padding) if plane != 'grid' else normalize_3d_coordinate(p.clone(), padding=self.padding)
-                index[plane] = coordinate2index(coord[plane], self.reso_plane if plane != 'grid' else self.reso_grid, coord_type='3d' if plane == 'grid' else None)
+                index[plane] = coordinate2index(coord[plane], self.reso_plane if plane != 'grid' else self.reso_grid, coord_type='3d' if plane == 'grid' else '2d')
 
         if self.map2local:
             p = self.map2local(p)
@@ -214,7 +214,7 @@ class PatchLocalPoolPointnet(nn.Module):
             raise ValueError('incorrect scatter type')
 
         if local_coord:
-            self.map2local = map2local(unit_size, pos_encoding=pos_encoding)
+            self.map2local = map2local(unit_size)
         else:
             self.map2local = None
 

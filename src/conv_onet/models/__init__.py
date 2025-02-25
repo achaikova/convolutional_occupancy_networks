@@ -44,8 +44,8 @@ class ConvolutionalOccupancyNetwork(nn.Module):
             self.label_embedding = SentenceTransformer(embedding_model).to(device)
 
             # Freeze the embedding model
-            for param in self.label_embedding.parameters():
-                param.requires_grad = False
+            #for param in self.label_embedding.parameters():
+            #    param.requires_grad = False
 
             self.reduce_embedding = nn.ModuleList([
                 nn.Linear(384, 128).to(device),

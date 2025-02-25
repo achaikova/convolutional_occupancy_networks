@@ -398,20 +398,29 @@ def add_key(base, new, base_name, new_name, device=None):
                 new_name: new}
     return base
 
-class map2local(object):
-    ''' Add new keys to the given input
+import torch.nn as nn
 
+def siren_init(m, w0=30.0, is_first=False):
+    """
+    Initialize a layer according to SIREN initialization rules.
+    
     Args:
-        s (float): the defined voxel size
-        pos_encoding (str): method for the positional encoding, linear|sin_cos ----X NO 
-    '''
-    def __init__(self, s):
-        super().__init__()
-        self.s = s
-    def __call__(self, p):
-        p = torch.remainder(p, self.s) / self.s # always possitive
-        # p = torch.fmod(p, self.s) / self.s # same sign as input p!
-        return p
+        m (nn.Module): The module (typically nn.Linear) to initialize.
+        w0 (float): The frequency scale for SIREN (default is 30).
+        is_first (bool): Whether this is the first layer in the network.
+    """
+    if isinstance(m, nn.Linear):
+        in_features = m.weight.size(1)
+        with torch.no_grad():
+            # First layer has a special initialization
+            if is_first:
+                m.weight.uniform_(-1 / in_features, 1 / in_features)
+            else:
+                limit = math.sqrt(6 / in_features) / w0
+                m.weight.uniform_(-limit, limit)
+            
+            if m.bias is not None:
+                m.bias.fill_(0.0)
 
 class positional_encoding(object):
     ''' Positional Encoding (presented in NeRF)
@@ -435,26 +444,18 @@ class positional_encoding(object):
                 out.append(torch.cos(freq * p))
             p = torch.cat(out, dim=2)
         return p
-    
 
-def siren_init(m, w0=30.0, is_first=False):
-    """
-    Initialize a layer according to SIREN initialization rules.
-    
+
+class map2local(object):
+    ''' Add new keys to the given input
     Args:
-        m (nn.Module): The module (typically nn.Linear) to initialize.
-        w0 (float): The frequency scale for SIREN (default is 30).
-        is_first (bool): Whether this is the first layer in the network.
-    """
-    if isinstance(m, nn.Linear):
-        in_features = m.weight.size(1)
-        with torch.no_grad():
-            # First layer has a special initialization
-            if is_first:
-                m.weight.uniform_(-1 / in_features, 1 / in_features)
-            else:
-                limit = math.sqrt(6 / in_features) / w0
-                m.weight.uniform_(-limit, limit)
-            
-            if m.bias is not None:
-                m.bias.fill_(0.0)
+        s (float): the defined voxel size
+    '''
+    def __init__(self, s, device=torch.device("cuda")):
+        super().__init__()
+        self.s = s
+        self.device = device
+    def __call__(self, p):
+        p = p.to(self.device)
+        p = torch.remainder(p, self.s) / self.s # always positive
+        return p

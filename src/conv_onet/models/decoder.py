@@ -180,7 +180,7 @@ class PatchLocalDecoder(nn.Module):
         self.sample_mode = sample_mode
 
         if local_coord:
-            self.map2local = map2local(unit_size, pos_encoding=pos_encoding)
+            self.map2local = map2local(unit_size)
         else:
             self.map2local = None
         self.pos_encoding = pos_encoding
